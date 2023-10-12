@@ -24,9 +24,9 @@ struct Directory {
 }
 
 impl Directory {
-    fn new() -> Directory {
+    fn root() -> Directory {
         Directory {
-            name: "root".to_string(),
+            name: "/".to_string(),
             files: vec![],
             subdirectories: vec![],
         }
@@ -66,7 +66,45 @@ impl Directory {
 }
 
 fn day_07(reader: BufReader<std::fs::File>) {
-    let mut root_directory = Directory::new();
+    let mut root = Directory::root();
+
+    for line in reader.lines() {
+        let line_str = line.unwrap();
+        let mut tokens = line_str.split(' ');
+        match tokens.next() {
+            Some("dir") => {
+                handle_directory();
+            },
+            Some("$") => {
+                let command = tokens.next().unwrap();
+                handle_command(command.to_string(), tokens.next());
+            },
+            Some(file_size) => {
+
+            },
+            _ => todo!()
+        }
+    }
+}
+
+fn handle_directory() {
+
+}
+
+fn handle_command(token: String, argument: Option<&str>) {
+    match token.as_str() {
+        "cd" => {
+
+        },
+        "ls" => {
+
+        },
+        _ => todo!(),
+    }
+}
+
+fn day_07_old(reader: BufReader<std::fs::File>) {
+    let mut root_directory = Directory::root();
 
     let mut current_directory = &mut root_directory;
     let mut directory_stack: VecDeque<*mut Directory> = VecDeque::new();
@@ -107,8 +145,7 @@ fn day_07(reader: BufReader<std::fs::File>) {
                                             );
                                         }
                                     }
-                                    current_directory =
-                                        current_directory.get_subdir(dir.to_string()).unwrap();
+                                    current_directory = current_directory.get_subdir(dir.to_string()).unwrap();
                                 }
                                 None => todo!(),
                             },
