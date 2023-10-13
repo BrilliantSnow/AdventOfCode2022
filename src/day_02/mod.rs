@@ -1,8 +1,8 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 
-fn main() {
-    let filename = "src/input.txt";
+pub fn main() {
+    let filename = "src/day_02/input.txt";
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
 

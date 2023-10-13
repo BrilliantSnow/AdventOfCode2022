@@ -22,8 +22,8 @@ impl Rucksack {
     }
 }
 
-fn main() {
-    let filename = "src/input.txt";
+pub fn main() {
+    let filename = "src/day_03/input.txt";
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
 

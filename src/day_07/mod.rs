@@ -3,9 +3,9 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-fn main() {
-    let filename = "src/input.txt";
-    // let filename = "src/testinput.txt";
+pub fn main() {
+    let filename = "src/day_07/input.txt";
+    // let filename = "testsrc/day_0#/input.txt";
     let file = std::fs::File::open(filename).unwrap();
     let reader = BufReader::new(file);
 
@@ -74,31 +74,23 @@ fn day_07(reader: BufReader<std::fs::File>) {
         match tokens.next() {
             Some("dir") => {
                 handle_directory();
-            },
+            }
             Some("$") => {
                 let command = tokens.next().unwrap();
                 handle_command(command.to_string(), tokens.next());
-            },
-            Some(file_size) => {
-
-            },
-            _ => todo!()
+            }
+            Some(file_size) => {}
+            _ => todo!(),
         }
     }
 }
 
-fn handle_directory() {
-
-}
+fn handle_directory() {}
 
 fn handle_command(token: String, argument: Option<&str>) {
     match token.as_str() {
-        "cd" => {
-
-        },
-        "ls" => {
-
-        },
+        "cd" => {}
+        "ls" => {}
         _ => todo!(),
     }
 }
@@ -145,7 +137,8 @@ fn day_07_old(reader: BufReader<std::fs::File>) {
                                             );
                                         }
                                     }
-                                    current_directory = current_directory.get_subdir(dir.to_string()).unwrap();
+                                    current_directory =
+                                        current_directory.get_subdir(dir.to_string()).unwrap();
                                 }
                                 None => todo!(),
                             },
