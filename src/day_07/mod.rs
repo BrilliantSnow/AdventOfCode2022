@@ -1,166 +1,194 @@
 use std::{
-    collections::VecDeque,
+    collections::HashMap,
+    error::Error,
     io::{BufRead, BufReader},
 };
 
-pub fn main() {
+
+pub struct Folder {
+    pub name: String,
+    pub size: usize,
+    pub directories: HashMap<String, Vec<Folder>>,
+}
+
+impl Folder {
+    pub fn new(name: String) -> Self {
+        Folder {
+            name,
+            size: 0,
+            directories: HashMap::new(),
+        }
+    }
+    pub fn new_file(name: String, size: usize) -> Self {
+        Folder {
+            name,
+            size,
+            directories: HashMap::new(),
+        }
+    }
+    pub fn child_size(&self) -> usize {
+        let mut size = self.size;
+        size += self
+            .directories
+            .iter()
+            .map(|(_, sub_directory)| {
+                sub_directory
+                    .iter()
+                    .map(|sub| sub.child_size())
+                    .sum::<usize>()
+            })
+            .sum::<usize>();
+        return size;
+    }
+}
+
+pub struct FileSystem {
+    pub file_path: Vec<String>,
+    pub files: HashMap<String, Folder>,
+}
+
+impl FileSystem {
+    pub fn handle_cd(&mut self, command: Option<&str>) {
+        if let Some(command) = command {
+            println!("cd {}", command);
+        }
+        match command {
+            Some("..") => self.parent_directory(),
+            Some("/") => self.root(),
+            Some(file) => self.sub_directory(file),
+            None => println!("Called cd with no arguments"),
+        }
+    }
+
+    pub fn add_dir(&mut self, new_directory: Folder) {
+        let current_dir = self.file_path_string();
+        match self.files.get(&current_dir) {
+            Some(existing_dir) => {
+                // dont add it
+            }
+            None => {
+                self.files.insert(
+                    format!("{}/{}", current_dir, new_directory.name),
+                    new_directory,
+                );
+            }
+        }
+    }
+
+    pub fn register_ls_outputs(&mut self, size: usize, name: &str) {}
+
+    pub fn root(&mut self) {
+        self.file_path = vec![];
+    }
+
+    pub fn sub_directory(&mut self, file: &str) {
+        self.file_path.push(file.into())
+    }
+
+    pub fn parent_directory(&mut self) {
+        self.file_path.pop();
+    }
+
+    pub fn file_path_string(&self) -> String {
+        if self.file_path.len() == 0 {
+            "/".into()
+        } else {
+            self.file_path.iter().fold("".into(), |path, word| {
+                (&*format!("{}/{}", path, word)).into()
+            })
+        }
+    }
+}
+
+struct Directory {
+    name: String,
+    size: usize,
+    folders: HashMap<String, Directory>,
+}
+
+pub fn main() -> Result<(), Box<dyn Error>> {
     let filename = "src/day_07/input.txt";
     // let filename = "testsrc/day_0#/input.txt";
     let file = std::fs::File::open(filename).unwrap();
     let reader = BufReader::new(file);
-
-    day_07(reader);
-}
-
-struct File {
-    size: i32,
-    name: String,
-}
-
-struct Directory {
-    files: Vec<File>,
-    subdirectories: Vec<Directory>,
-    name: String,
-}
-
-impl Directory {
-    fn root() -> Directory {
-        Directory {
-            name: "/".to_string(),
-            files: vec![],
-            subdirectories: vec![],
-        }
-    }
-
-    fn get_subdir(&mut self, sub_dir: String) -> Option<&mut Directory> {
-        self.subdirectories.iter_mut().find(|x| x.name == sub_dir)
-    }
-
-    fn add_subdir(&mut self, sub_dir: Directory) {
-        self.subdirectories.push(sub_dir);
-    }
-
-    fn add_file(&mut self, file: File) {
-        self.files.push(file);
-    }
-
-    fn size(&self) -> i32 {
-        let this_size: i32 = self.files.iter().map(|x| x.size).sum();
-        let children_size: i32 = self.subdirectories.iter().map(|x| x.size()).sum();
-        let size = this_size + children_size;
-        // if size <= 100000 {
-        //     println!("{}", size);
-        // }
-        return size;
-    }
-
-    fn print(&self, indent: &str) {
-        println!("{}Dir: {} {}", indent, self.name, self.size());
-        for file in &self.files {
-            println!("{}{} {}", indent.to_owned() + "  ", file.name, file.size);
-        }
-        for dir in &self.subdirectories {
-            dir.print((indent.to_owned() + "  ").as_str());
-        }
-    }
-}
-
-fn day_07(reader: BufReader<std::fs::File>) {
-    let mut root = Directory::root();
-
-    for line in reader.lines() {
-        let line_str = line.unwrap();
-        let mut tokens = line_str.split(' ');
-        match tokens.next() {
-            Some("dir") => {
-                handle_directory();
-            }
-            Some("$") => {
-                let command = tokens.next().unwrap();
-                handle_command(command.to_string(), tokens.next());
-            }
-            Some(file_size) => {}
-            _ => todo!(),
-        }
-    }
-}
-
-fn handle_directory() {}
-
-fn handle_command(token: String, argument: Option<&str>) {
-    match token.as_str() {
-        "cd" => {}
-        "ls" => {}
-        _ => todo!(),
-    }
-}
-
-fn day_07_old(reader: BufReader<std::fs::File>) {
-    let mut root_directory = Directory::root();
-
-    let mut current_directory = &mut root_directory;
-    let mut directory_stack: VecDeque<*mut Directory> = VecDeque::new();
-
-    for line in reader.lines() {
-        match line {
-            Ok(input) => {
-                let mut token = input.split(' ').fuse();
-                match token.next() {
-                    Some("dir") => {
-                        // todo
+    // root
+    let root_directory = Folder::new("/".into());
+    let mut file_system = FileSystem {
+        file_path: vec![],
+        files: HashMap::new(),
+    };
+    file_system.add_dir(root_directory);
+    // loop through commands line by line
+    for (_, maybe_line) in reader.lines().enumerate() {
+        if let Ok(line) = maybe_line {
+            // println!("Line number: {}: {}", index, line);
+            let mut tokens = line.split_whitespace();
+            match tokens.next() {
+                Some("$") => match tokens.next() {
+                    Some("ls") => {
+                        // do nothing. prints out files. The files will be read on the following lines
                     }
-                    Some("$") => {
-                        match token.next() {
-                            Some("cd") => match token.next() {
-                                Some("..") => unsafe {
-                                    current_directory = &mut *directory_stack.pop_back().unwrap();
-                                },
-                                Some("/") => {
-                                    current_directory = &mut root_directory;
-                                    directory_stack.clear();
-                                }
-                                Some(dir) => {
-                                    match current_directory.get_subdir(dir.to_string()) {
-                                        Some(existing_directory) => {
-                                            directory_stack.push_back(existing_directory);
-                                        }
-                                        None => {
-                                            current_directory.add_subdir(Directory {
-                                                files: vec![],
-                                                subdirectories: vec![],
-                                                name: dir.to_string(),
-                                            });
-                                            directory_stack.push_back(
-                                                current_directory
-                                                    .get_subdir(dir.to_string())
-                                                    .unwrap(),
-                                            );
-                                        }
-                                    }
-                                    current_directory =
-                                        current_directory.get_subdir(dir.to_string()).unwrap();
-                                }
-                                None => todo!(),
-                            },
-                            Some("ls") => {
-                                // not sure this needs handled
+                    Some("cd") => file_system.handle_cd(tokens.next()),
+                    Some(invalid_command) => {
+                        return Err(format!(
+                            "{} is not a valid command. Commands are: [cd, ls]",
+                            invalid_command
+                        )
+                        .into());
+                    }
+                    None => (),
+                },
+                Some("dir") => {}
+                Some(data) => {
+                    if let Ok(file_size) = data.parse::<usize>() {
+                        match tokens.next() {
+                            Some(file_name) => {
+                                file_system.add_dir(Folder::new_file(file_name.into(), file_size))
                             }
-                            _ => todo!("Handle additional conditions"),
+                            None => {
+                                return Err(format!(
+                                    "ls returned a file size without a diretory/file name"
+                                )
+                                .into());
+                            }
                         }
+                    } else {
+                        return Err(format!("{} is not a valid file size", data).into());
                     }
-                    Some(size) => {
-                        let file_size: i32 = size.parse().unwrap();
-                        current_directory.add_file(File {
-                            size: file_size,
-                            name: token.next().unwrap().to_string(),
-                        });
-                    }
-                    None => todo!("Handle additional conditions"),
                 }
+                None => (),
             }
-            Err(error) => panic!("Reading line from file failed: {}", error),
+        } else {
+            return Err(format!("Error with reading input file").into());
         }
     }
-    root_directory.print("");
-    println!("{}", root_directory.size());
+    let mut flat_list: Vec<(String, Folder)> = file_system
+        .files
+        .into_iter()
+        .map(|(path, data)| {
+            (
+                path.get(0..data.name.len())
+                    .expect("file path contains file name")
+                    .to_string(),
+                data,
+            )
+        })
+        .collect();
+    flat_list.sort_by(|(left, _), (right, _)| left.cmp(right));
+    let mut directories: HashMap<&str, Vec<&Folder>> = HashMap::new();
+    // flat list to map of folders. Paths are flat
+    for (path, data) in flat_list.iter() {
+        directories
+            .entry(path)
+            .or_insert(Vec::new())
+            .push(data);
+    }
+    for (file, contents) in directories.iter() {
+        println!("Directory: {}", file);
+        for folder in contents {
+            println!("\t{}: {}", folder.name, folder.size);
+        }
+    }
+    println!("End of day 07");
+    Ok(())
 }
