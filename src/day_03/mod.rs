@@ -63,6 +63,7 @@ pub fn main() {
         badge_total += get_priority(badge);
     }
     println!("(Part 2) The total priority of the badges: {}", badge_total);
+    println!("End of day 03");
 }
 
 fn find_common(group: Vec<Rucksack>) -> Option<char> {

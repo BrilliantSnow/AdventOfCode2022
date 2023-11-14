@@ -78,4 +78,5 @@ pub fn main() {
     }
 
     println!("Part 2: there are {} pairs that overlap at all!", overlaps_at_all);
+    println!("End of day 04");
 }

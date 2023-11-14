@@ -18,6 +18,7 @@ pub fn main() {
     }
     println!("(Part 1) Total points calculated: {}", total_points_one);
     println!("(Part 2) Total points calculated: {}", total_points_two);
+    println!("End of day 02");
 }
 
 fn points_two(their_move: char, your_move: char) -> i32 {

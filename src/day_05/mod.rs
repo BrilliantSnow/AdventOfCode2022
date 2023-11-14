@@ -103,5 +103,5 @@ pub fn main() {
         )
     }
     println!("{:?}", ship.get_top_crates());
-
+    println!("End of day 05");
 }

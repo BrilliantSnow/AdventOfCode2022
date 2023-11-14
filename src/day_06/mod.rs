@@ -29,4 +29,5 @@ pub fn main() {
     println!("Part 1 solution: {}", find_first_instance_of_n_unique(file, 4));
     let file = File::open(filename).unwrap();
     println!("Part 2 solution: {}", find_first_instance_of_n_unique(file, 14));
+    println!("End of day 06");
 }

@@ -36,4 +36,5 @@ pub fn main() {
         top_three_count += elf_list.get(index).unwrap().total_calories;
     }
     println!("(Part 2) The most calories carried between 3 elves: {}", top_three_count);
+    println!("End of day 01");
 }
