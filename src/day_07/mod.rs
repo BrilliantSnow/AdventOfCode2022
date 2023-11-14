@@ -1,194 +1,200 @@
 use std::{
-    collections::HashMap,
+    cell::RefCell,
     error::Error,
     io::{BufRead, BufReader},
+    ops::Deref,
+    rc::{Rc, Weak},
 };
 
+pub enum Type {
+    Dir,
+    File,
+}
 
-pub struct Folder {
+pub struct Node {
+    pub r#type: Type,
     pub name: String,
-    pub size: usize,
-    pub directories: HashMap<String, Vec<Folder>>,
+    pub parent: Option<Weak<RefCell<Node>>>,
+    pub children: Vec<Rc<RefCell<Node>>>,
+    pub size: Option<i128>,
 }
 
-impl Folder {
-    pub fn new(name: String) -> Self {
-        Folder {
-            name,
-            size: 0,
-            directories: HashMap::new(),
-        }
-    }
-    pub fn new_file(name: String, size: usize) -> Self {
-        Folder {
-            name,
-            size,
-            directories: HashMap::new(),
-        }
-    }
-    pub fn child_size(&self) -> usize {
-        let mut size = self.size;
-        size += self
-            .directories
-            .iter()
-            .map(|(_, sub_directory)| {
-                sub_directory
-                    .iter()
-                    .map(|sub| sub.child_size())
-                    .sum::<usize>()
-            })
-            .sum::<usize>();
-        return size;
-    }
+pub trait NodeModify: Sized {
+    fn add_file(&self, name: &str, size: i128);
+    fn add_directory(&self, name: &str);
+    fn handle_cd(&self, command: Option<&str>) -> Option<Self>;
+    fn calculate_size(&self) -> i128;
+    fn collect(&self) -> Vec<Self>;
+    fn collect_dir_sizes(&self) -> Vec<i128>;
 }
 
-pub struct FileSystem {
-    pub file_path: Vec<String>,
-    pub files: HashMap<String, Folder>,
-}
+impl NodeModify for Rc<RefCell<Node>> {
+    fn add_file(&self, name: &str, size: i128) {
+        let file = Node {
+            children: vec![],
+            name: name.to_string(),
+            parent: Some(Rc::downgrade(self)),
+            size: Some(size),
+            r#type: Type::File,
+        };
+        self.borrow_mut().children.push(Rc::new(RefCell::new(file)));
+    }
 
-impl FileSystem {
-    pub fn handle_cd(&mut self, command: Option<&str>) {
-        if let Some(command) = command {
-            println!("cd {}", command);
-        }
+    fn add_directory(&self, name: &str) {
+        let directory = Node {
+            children: vec![],
+            name: name.to_string(),
+            parent: Some(Rc::downgrade(self)),
+            size: None,
+            r#type: Type::Dir,
+        };
+        self.borrow_mut()
+            .children
+            .push(Rc::new(RefCell::new(directory)));
+    }
+
+    fn handle_cd(&self, command: Option<&str>) -> Option<Self> {
         match command {
-            Some("..") => self.parent_directory(),
-            Some("/") => self.root(),
-            Some(file) => self.sub_directory(file),
-            None => println!("Called cd with no arguments"),
+            Some("..") => match &self.deref().borrow_mut().parent {
+                Some(parent) => Some(parent.upgrade().expect("Parent to not be borrowed")),
+                None => None,
+            },
+            Some("/") => None,
+            Some(file_name) => self
+                .borrow_mut()
+                .children
+                .iter()
+                .find(|child| child.deref().borrow().name == file_name)
+                .cloned(),
+            None => panic!("Called cd with no arguments"),
         }
     }
 
-    pub fn add_dir(&mut self, new_directory: Folder) {
-        let current_dir = self.file_path_string();
-        match self.files.get(&current_dir) {
-            Some(existing_dir) => {
-                // dont add it
-            }
-            None => {
-                self.files.insert(
-                    format!("{}/{}", current_dir, new_directory.name),
-                    new_directory,
-                );
-            }
-        }
-    }
-
-    pub fn register_ls_outputs(&mut self, size: usize, name: &str) {}
-
-    pub fn root(&mut self) {
-        self.file_path = vec![];
-    }
-
-    pub fn sub_directory(&mut self, file: &str) {
-        self.file_path.push(file.into())
-    }
-
-    pub fn parent_directory(&mut self) {
-        self.file_path.pop();
-    }
-
-    pub fn file_path_string(&self) -> String {
-        if self.file_path.len() == 0 {
-            "/".into()
+    fn calculate_size(&self) -> i128 {
+        if let Type::Dir = self.borrow().r#type {
+            let size = self
+                .borrow()
+                .children
+                .iter()
+                .map(|child| child.calculate_size())
+                .sum();
+            // println!("Directory size: {}", size);
+            return size;
         } else {
-            self.file_path.iter().fold("".into(), |path, word| {
-                (&*format!("{}/{}", path, word)).into()
-            })
+            // println!("File size: {}", self.borrow().size.unwrap_or(0));
+            return self.borrow().size.expect("Files have sizes");
         }
+    }
+
+    fn collect(&self) -> Vec<Self> {
+        let mut flat_child_list: Vec<Self> = self
+            .borrow()
+            .children
+            .iter()
+            .map(|child| child.collect())
+            .flatten()
+            .collect();
+        flat_child_list.push(self.clone());
+        return flat_child_list;
+    }
+
+    fn collect_dir_sizes(&self) -> Vec<i128> {
+        let mut output: Vec<i128> = self
+            .borrow()
+            .children
+            .iter()
+            .filter(|child| matches!(child.borrow().r#type, Type::Dir))
+            .map(|child| child.collect_dir_sizes())
+            .flatten()
+            .collect();
+        output.push(self.calculate_size());
+        return output;
     }
 }
 
-struct Directory {
-    name: String,
-    size: usize,
-    folders: HashMap<String, Directory>,
-}
-
-pub fn main() -> Result<(), Box<dyn Error>> {
+pub fn main() {
     let filename = "src/day_07/input.txt";
-    // let filename = "testsrc/day_0#/input.txt";
     let file = std::fs::File::open(filename).unwrap();
     let reader = BufReader::new(file);
     // root
-    let root_directory = Folder::new("/".into());
-    let mut file_system = FileSystem {
-        file_path: vec![],
-        files: HashMap::new(),
-    };
-    file_system.add_dir(root_directory);
+    let root = Rc::new(RefCell::new(Node {
+        r#type: Type::Dir,
+        name: "".to_string(),
+        parent: None,
+        children: vec![],
+        size: None,
+    }));
+    let mut current = root.clone();
     // loop through commands line by line
     for (_, maybe_line) in reader.lines().enumerate() {
         if let Ok(line) = maybe_line {
             // println!("Line number: {}: {}", index, line);
-            let mut tokens = line.split_whitespace();
+            let tokens = line.split_whitespace();
+            let mut tokens = tokens.clone();
             match tokens.next() {
                 Some("$") => match tokens.next() {
                     Some("ls") => {
                         // do nothing. prints out files. The files will be read on the following lines
                     }
-                    Some("cd") => file_system.handle_cd(tokens.next()),
+                    Some("cd") => match current.handle_cd(tokens.next()) {
+                        Some(next) => {
+                            current = next;
+                        }
+                        None => current = root.clone(),
+                    },
                     Some(invalid_command) => {
-                        return Err(format!(
+                        panic!(
                             "{} is not a valid command. Commands are: [cd, ls]",
                             invalid_command
-                        )
-                        .into());
+                        );
                     }
                     None => (),
                 },
-                Some("dir") => {}
+                Some("dir") => {
+                    match tokens.next() {
+                        Some(dir_name) => {
+                            current.add_directory(dir_name);
+                        }
+                        None => {
+                            // hmmm
+                        }
+                    }
+                }
                 Some(data) => {
-                    if let Ok(file_size) = data.parse::<usize>() {
+                    if let Ok(file_size) = data.parse::<i128>() {
                         match tokens.next() {
                             Some(file_name) => {
-                                file_system.add_dir(Folder::new_file(file_name.into(), file_size))
+                                current.add_file(file_name, file_size);
                             }
                             None => {
-                                return Err(format!(
-                                    "ls returned a file size without a diretory/file name"
-                                )
-                                .into());
+                                panic!("ls returned a file size without a diretory/file name");
                             }
                         }
                     } else {
-                        return Err(format!("{} is not a valid file size", data).into());
+                        panic!("{} is not a valid file size", data);
                     }
                 }
                 None => (),
             }
         } else {
-            return Err(format!("Error with reading input file").into());
+            panic!("Error with reading input file");
         }
     }
-    let mut flat_list: Vec<(String, Folder)> = file_system
-        .files
-        .into_iter()
-        .map(|(path, data)| {
-            (
-                path.get(0..data.name.len())
-                    .expect("file path contains file name")
-                    .to_string(),
-                data,
-            )
-        })
-        .collect();
-    flat_list.sort_by(|(left, _), (right, _)| left.cmp(right));
-    let mut directories: HashMap<&str, Vec<&Folder>> = HashMap::new();
-    // flat list to map of folders. Paths are flat
-    for (path, data) in flat_list.iter() {
-        directories
-            .entry(path)
-            .or_insert(Vec::new())
-            .push(data);
-    }
-    for (file, contents) in directories.iter() {
-        println!("Directory: {}", file);
-        for folder in contents {
-            println!("\t{}: {}", folder.name, folder.size);
-        }
-    }
+    let _ = current;
+    let flat_list = root.collect_dir_sizes();
+    // part 1
+    let large_directories_size: i128 = flat_list.iter().filter(|size| **size <= 100000).sum();
+    println!("Part 1 answer: {}", large_directories_size);
+    // part 2
+    let total_disk_size = 70000000;
+    let needed_space = 30000000;
+    let used_space: i128 = root.calculate_size();
+    let space_needed_to_free = needed_space - (total_disk_size - used_space);
+    let smallest_directory_large_enough = flat_list
+        .iter()
+        .filter(|size| **size >= space_needed_to_free)
+        .min()
+        .expect("List has at least 1 item");
+    println!("Part 2 answer: {}", smallest_directory_large_enough);
     println!("End of day 07");
-    Ok(())
 }
