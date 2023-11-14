@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    error::Error,
     io::{BufRead, BufReader},
     ops::Deref,
     rc::{Rc, Weak},
